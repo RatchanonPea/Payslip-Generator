@@ -100,15 +100,18 @@ export function drawSlip(e: Computed, s: Settings) {
     const aMax = W * 0.58
     c.font = `400 ${aSize}px "IBM Plex Sans Thai", sans-serif`
     const lines: string[] = []
-    let cur = ''
     // the box usually starts with the company name, which is already the header: skip that line
     const addrLines = s.companyAddress.split('\n').map((l) => l.trim()).filter(Boolean)
     if (addrLines[0] === s.companyName.trim()) addrLines.shift()
-    for (const word of addrLines.join(' ').split(/\s+/).filter(Boolean)) {
-      const next = cur ? `${cur} ${word}` : word
-      if (cur && c.measureText(next).width > aMax) { lines.push(cur); cur = word } else cur = next
+    // every line the user typed stays its own line; only a line too long for the header is wrapped (at spaces)
+    for (const para of addrLines) {
+      let cur = ''
+      for (const word of para.split(/\s+/).filter(Boolean)) {
+        const next = cur ? `${cur} ${word}` : word
+        if (cur && c.measureText(next).width > aMax) { lines.push(cur); cur = word } else cur = next
+      }
+      if (cur) lines.push(cur)
     }
-    if (cur) lines.push(cur)
     const maxLines = H < 700 ? 2 : 3
     const shown = lines.slice(0, maxLines)
     if (lines.length > maxLines) shown[maxLines - 1] += ' …'

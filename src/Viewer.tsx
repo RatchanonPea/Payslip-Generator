@@ -65,10 +65,19 @@ export function Viewer(props: {
     setClosing(true)
     closeTimer.current = window.setTimeout(() => onClosed(last), 260)
   }
-  useEffect(() => () => { window.clearTimeout(closeTimer.current); window.clearTimeout(leaveTimer.current) }, [])
+  useEffect(() => () => { window.clearTimeout(closeTimer.current); window.clearTimeout(leaveTimer.current); window.clearTimeout(settleTimer.current) }, [])
   const [zoomed, setZoomed] = useState(false)
   const [leaving, setLeaving] = useState<{ item: DocItem; dir: number; id: number } | null>(null)
   const leaveTimer = useRef<number | undefined>(undefined)
+  // dragging the enlarged page sideways: the page follows the pointer, the neighbour follows it in
+  const [dragX, setDragX] = useState(0)
+  const [settling, setSettling] = useState(false)
+  const [quiet, setQuiet] = useState(false) // the page that just arrived by drag is already in place, no entrance animation
+  const drag = useRef<{ x0: number; t0: number; w: number; moved: boolean } | null>(null)
+  const justDragged = useRef(false)
+  const stageRef = useRef<HTMLDivElement>(null)
+  const side = useRef(1) // which side the neighbour page is on (-1: dragged left, so the next page)
+  const settleTimer = useRef<number | undefined>(undefined)
   const [dir, setDir] = useState(1) // which way the last page change went, for the slide in the enlarged view
   const [rawText, setRawText] = useState(false)
   const zoomRef = useRef(false)
@@ -117,17 +126,18 @@ export function Viewer(props: {
   const count = items.length
   const idx = Math.max(0, Math.min(cur, count - 1))
 
-  const goTo = (i: number) => {
+  const goTo = (i: number, fromDrag = false) => {
+    setQuiet(fromDrag)
     const n = Math.max(0, Math.min(count - 1, i))
     if (n !== curRef.current) {
       const d = n > curRef.current ? 1 : -1
       setDir(d)
       // keep the page we are leaving on screen while it slides out
       const old = items[curRef.current]
-      if (zoomRef.current && old) {
+      if (zoomRef.current && old && !fromDrag) {
         setLeaving({ item: old, dir: d, id: Date.now() })
         window.clearTimeout(leaveTimer.current)
-        leaveTimer.current = window.setTimeout(() => setLeaving(null), 820)
+        leaveTimer.current = window.setTimeout(() => setLeaving(null), 1100)
       }
     }
     curRef.current = n
@@ -157,6 +167,58 @@ export function Viewer(props: {
     if (!isDeck) return
     acc.current += e.deltaY
     if (Math.abs(acc.current) >= 70) { step(acc.current > 0 ? 1 : -1); acc.current = 0 }
+  }
+
+  const gap = (w: number) => w * 1.06
+  // "pulling cloth": the page first shrinks a little and leans so the edge it is pulled towards recedes more than the one left behind
+  const cloth = (x: number, w: number, lean: number) => {
+    const p = w ? Math.min(1, Math.abs(x) / gap(w)) : 0 // how far the page has travelled
+    const q = Math.sin(Math.min(1, p * 2) * Math.PI / 2) // the shrink and lean happen early, then it just travels
+    return `translateX(${x}px) perspective(1400px) rotateY(${lean * 7 * q}deg) scale(${1 - 0.045 * q})`
+  }
+  const clothIn = (x: number, w: number, lean: number) => {
+    const q = Math.sin(Math.min(1, (1 - (w ? Math.min(1, Math.abs(x) / gap(w)) : 0)) * 2) * Math.PI / 2) // the arriving page straightens as it comes close
+    return `translateX(${x}px) perspective(1400px) rotateY(${lean * 7 * q}deg) scale(${1 - 0.045 * q})`
+  }
+  const onDragStart = (e: React.PointerEvent) => {
+    if (settling || e.button !== 0 || !stageRef.current) return
+    justDragged.current = false
+    drag.current = { x0: e.clientX, t0: performance.now(), w: stageRef.current.getBoundingClientRect().width, moved: false }
+    e.currentTarget.setPointerCapture(e.pointerId)
+  }
+  const onDragMove = (e: React.PointerEvent) => {
+    const d = drag.current
+    if (!d) return
+    const dx = e.clientX - d.x0
+    if (Math.abs(dx) > 6) d.moved = true
+    if (!d.moved) return
+    const hasNext = dx < 0 ? idx < count - 1 : idx > 0
+    if (dx !== 0) side.current = dx < 0 ? -1 : 1
+    setDragX(hasNext ? dx : dx * 0.25) // no page that way: resist like a rubber band
+  }
+  const onDragEnd = (e: React.PointerEvent) => {
+    const d = drag.current
+    drag.current = null
+    if (!d || !d.moved) return
+    justDragged.current = true
+    const dx = e.clientX - d.x0
+    const v = Math.abs(dx) / Math.max(1, performance.now() - d.t0)
+    const hasNext = dx < 0 ? idx < count - 1 : idx > 0
+    const commit = hasNext && (Math.abs(dx) > d.w * 0.2 || (v > 0.5 && Math.abs(dx) > 30))
+    setSettling(true)
+    window.clearTimeout(settleTimer.current)
+    if (commit) {
+      const sign = dx < 0 ? -1 : 1
+      setDragX(sign * gap(d.w))
+      settleTimer.current = window.setTimeout(() => {
+        goTo(idx - sign, true)
+        setDragX(0)
+        setSettling(false)
+      }, 650)
+    } else {
+      setDragX(0)
+      settleTimer.current = window.setTimeout(() => setSettling(false), 560)
+    }
   }
 
   const visible: number[] = []
@@ -194,15 +256,28 @@ export function Viewer(props: {
         </div>
 
         {isDeck && zoomed && count > 0 ? (
-          <div className="gal-zoom" onClick={() => setZoomed(false)} title="คลิกเพื่อย่อ (Esc)">
+          <div className="gal-zoom" onClick={() => { if (justDragged.current) { justDragged.current = false; return } setZoomed(false) }} title="คลิกเพื่อย่อ (Esc) · ลากไปซ้ายขวาเพื่อเปลี่ยนหน้า">
             <div className="gal-zoom-cap">{items[idx].label} · {idx + 1}/{count} · คลิกหรือกด Esc เพื่อย่อ</div>
-            <div className="gal-zstage">
+            <div
+              className={`gal-zstage ${dragX !== 0 || settling ? 'dragging' : ''} ${settling ? 'settling' : ''}`} ref={stageRef}
+              onPointerDown={onDragStart} onPointerMove={onDragMove} onPointerUp={onDragEnd} onPointerCancel={onDragEnd}
+            >
+              {(dragX !== 0 || settling) && (() => {
+                const n = side.current < 0 ? idx + 1 : idx - 1
+                const w = stageRef.current?.getBoundingClientRect().width ?? 0
+                if (n < 0 || n >= count) return null
+                return (
+                  <div key={`nb-${items[n].key}`} className="gal-zslide nb" aria-hidden="true" style={{ transform: clothIn(dragX - side.current * gap(w), w, -side.current) }}>
+                    <PageCanvas draw={items[n].draw} />
+                  </div>
+                )
+              })()}
               {leaving && leaving.item.key !== items[idx].key && (
                 <div key={`out-${leaving.id}`} className={`gal-zslide out ${leaving.dir > 0 ? 'next' : 'prev'}`} aria-hidden="true">
                   <PageCanvas draw={leaving.item.draw} />
                 </div>
               )}
-              <div key={items[idx].key} className={`gal-zslide in ${dir > 0 ? 'next' : 'prev'}`}>
+              <div key={items[idx].key} className={`gal-zslide in ${dir > 0 ? 'next' : 'prev'} ${quiet ? 'still' : ''}`} style={dragX !== 0 || settling ? { transform: cloth(dragX, stageRef.current?.getBoundingClientRect().width ?? 0, side.current) } : undefined}>
                 <PageCanvas draw={items[idx].draw} />
               </div>
             </div>

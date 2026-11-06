@@ -580,15 +580,15 @@ input[type='checkbox'] { accent-color: var(--ink); width: 18px; height: 18px; ve
 .gal-zoom { overflow-x: hidden; }
 .gal-zstage { position: relative; max-width: 900px; margin: 0 auto; }
 .gal-zstage .gal-canvas { max-width: none; }
-.gal-zslide.in { animation: zInNext .8s cubic-bezier(.32, .72, .0, 1) both; will-change: transform; }
+.gal-zslide.in { animation: zInNext 1.05s cubic-bezier(.22, .61, .21, 1) backwards; will-change: transform; }
 .gal-zslide.in.prev { animation-name: zInPrev; }
-.gal-zslide.out { position: absolute; left: 0; right: 0; top: 0; pointer-events: none; animation: zOutNext .8s cubic-bezier(.32, .72, .0, 1) both; will-change: transform; }
+.gal-zslide.out { position: absolute; left: 0; right: 0; top: 0; pointer-events: none; animation: zOutNext 1.05s cubic-bezier(.22, .61, .21, 1) backwards; will-change: transform; }
 .gal-zslide.out.prev { animation-name: zOutPrev; }
 /* a real carousel: the pages sit side by side and move together, nothing overlaps or fades */
-@keyframes zInNext { from { transform: translateX(112%); } to { transform: none; } }
-@keyframes zInPrev { from { transform: translateX(-112%); } to { transform: none; } }
-@keyframes zOutNext { from { transform: none; } to { transform: translateX(-112%); } }
-@keyframes zOutPrev { from { transform: none; } to { transform: translateX(112%); } }
+@keyframes zInNext { 0% { transform: translateX(112%) perspective(1400px) rotateY(7deg) scale(.955); } 100% { transform: none; } }
+@keyframes zInPrev { 0% { transform: translateX(-112%) perspective(1400px) rotateY(-7deg) scale(.955); } 100% { transform: none; } }
+@keyframes zOutNext { 0% { transform: none; } 100% { transform: translateX(-112%) perspective(1400px) rotateY(-7deg) scale(.955); } }
+@keyframes zOutPrev { 0% { transform: none; } 100% { transform: translateX(112%) perspective(1400px) rotateY(7deg) scale(.955); } }
 @media (prefers-reduced-motion: reduce) { .gal-zslide.in, .gal-zslide.out { animation: none; } .gal-zslide.out { display: none; } }
 
 /* editable cells in the data table */
@@ -604,3 +604,29 @@ td:has(> .ec) { padding-top: 5px; padding-bottom: 5px; }
 .ec:hover { border-color: rgba(26, 111, 209, .35) !important; background: #fff !important; }
 .ec:focus { border-color: var(--focus) !important; background: #fff !important; box-shadow: 0 0 0 3px rgba(26, 111, 209, .2); }
 .ec-ro { opacity: .7; }
+
+/* drag the enlarged page like a sheet of paper */
+.gal-zstage { touch-action: pan-y; cursor: grab; user-select: none; -webkit-user-select: none; }
+.gal-zstage.dragging { cursor: grabbing; }
+.gal-zstage.dragging .gal-zslide.in, .gal-zstage.dragging .gal-zslide.nb { animation: none; }
+.gal-zslide.still { animation: none; }
+.gal-zslide.nb { position: absolute; left: 0; right: 0; top: 0; pointer-events: none; }
+.gal-zstage.dragging .gal-zslide { will-change: transform; }
+.gal-zstage.settling .gal-zslide { transition: transform .62s cubic-bezier(.22, .61, .21, 1); }
+/* while dragging the page trails the pointer a little, like cloth or water, instead of snapping to it */
+.gal-zstage.dragging:not(.settling) .gal-zslide { transition: transform .16s ease-out; }
+
+/* signature box: same height before and after, content fades in, the side notes unfold */
+.sig-drop { min-height: 150px; transition: border-color .3s, background-color .4s, box-shadow .3s, transform .3s; }
+.sig-drop.has img { max-height: 118px; }
+.sig-drop > img, .sig-drop > .sig-icon, .sig-drop > b, .sig-drop > span:not(.sig-icon) { animation: sigIn .6s cubic-bezier(.22, .8, .24, 1) backwards; }
+.sig-drop > img { animation-name: sigImgIn; animation-duration: .7s; }
+@keyframes sigIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes sigImgIn { from { opacity: 0; transform: scale(.92); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+.sig-fold { display: grid; grid-template-rows: 0fr; opacity: 0; visibility: hidden; transition: grid-template-rows .5s cubic-bezier(.22, .8, .24, 1), opacity .4s ease, visibility 0s .5s; }
+.sig-fold.open { grid-template-rows: 1fr; opacity: 1; visibility: visible; transition: grid-template-rows .5s cubic-bezier(.22, .8, .24, 1), opacity .5s ease .1s, visibility 0s; }
+.sig-fold-in { min-height: 0; overflow: hidden; display: grid; gap: 6px; justify-items: start; }
+@media (prefers-reduced-motion: reduce) { .sig-drop > * { animation: none !important; } .sig-fold, .sig-fold.open { transition: none; } }
+
+/* address box follows its content */
+#addr { resize: none; overflow-y: hidden; transition: height .25s cubic-bezier(.22, .8, .24, 1), border-color .2s, box-shadow .2s, background-color .2s; }

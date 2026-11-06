@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { FIELDS, defaultSettings } from './lib/fields'
 import { autoMap } from './lib/mapping'
 import { parseFile, templateCsv, type ParsedFile } from './lib/parse'
@@ -689,12 +689,13 @@ function SignatureField(props: { value: string; name: string; onChange: (v: stri
             <label htmlFor="sn">ชื่อผู้เซ็น (แสดงใต้ลายเซ็น)</label>
             <input id="sn" value={name} placeholder="เช่น นายสมชาย ใจดี" onChange={(e) => onName(e.target.value)} />
           </div>
-          {thumb && (
-            <>
+          {/* always rendered and folded with a height animation, so nothing below it jumps when the signature is added or removed */}
+          <div className={`sig-fold ${thumb ? 'open' : ''}`}>
+            <div className="sig-fold-in">
               <small>ลบพื้นหลังและตัดขอบให้อัตโนมัติแล้ว</small>
-              <button className="link" type="button" onClick={() => onChange('')}>เอาลายเซ็นออก</button>
-            </>
-          )}
+              <button className="link" type="button" tabIndex={thumb ? 0 : -1} onClick={() => onChange('')}>เอาลายเซ็นออก</button>
+            </div>
+          </div>
           <small>รูปอยู่ในเบราว์เซอร์เท่านั้น ไม่ถูกอัปโหลดไปไหน</small>
           {err && <small className="sig-err" role="alert">{err}</small>}
         </div>
@@ -717,6 +718,24 @@ function AddressField(props: { value: string; onChange: (v: string) => void }) {
   const [q, setQ] = useState('')
   const [cur, setCur] = useState(0)
   const listRef = useRef<HTMLUListElement>(null)
+  const ta = useRef<HTMLTextAreaElement>(null)
+
+  // the box grows (and shrinks) with the address, smoothly; at least 3 lines
+  const fit = () => {
+    const el = ta.current
+    if (!el) return
+    const prev = el.offsetHeight
+    el.style.height = 'auto'
+    const next = el.scrollHeight + (el.offsetHeight - el.clientHeight)
+    el.style.height = `${prev}px`
+    void el.offsetHeight // commit the old height so the change below is animated
+    el.style.height = `${next}px`
+  }
+  useLayoutEffect(fit, [value])
+  useEffect(() => {
+    window.addEventListener('resize', fit)
+    return () => window.removeEventListener('resize', fit)
+  }, [])
 
   useScrollLock(open)
   useEffect(() => { if (open && !data) loadProvinces().then(setData).catch(() => {}) }, [open, data])
@@ -761,7 +780,7 @@ function AddressField(props: { value: string; onChange: (v: string) => void }) {
   return (
     <>
       <label htmlFor="addr">ที่อยู่บริษัท (แสดงบนสลิป)</label>
-      <textarea id="addr" rows={3} value={value} onChange={(e) => onChange(e.target.value)} placeholder="พิมพ์เลขที่ ถนน ต่อท้ายได้เลย หรือกดปุ่มด้านล่างเพื่อเลือกจังหวัด อำเภอ ตำบล" />
+      <textarea id="addr" ref={ta} rows={3} value={value} onChange={(e) => onChange(e.target.value)} placeholder="พิมพ์เลขที่ ถนน ต่อท้ายได้เลย หรือกดปุ่มด้านล่างเพื่อเลือกจังหวัด อำเภอ ตำบล" />
       <div className="row">
         <button className="btn ghost" type="button" onClick={() => setOpen(true)}><span className="btn-ico" aria-hidden="true">📍</span> เลือกจากรายการที่อยู่</button>
       </div>
