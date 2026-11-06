@@ -40,6 +40,50 @@ function EditCell(props: { value: string; shown?: string; num?: boolean; disable
   )
 }
 
+const OUT_ICONS: Record<string, React.ReactElement> = {
+  doc: <><path d="M7 3h7l5 5v13H7z" /><path d="M14 3v5h5M10 13h6M10 17h4" /></>,
+  tax: <><path d="M6 3h12v18l-3-2-3 2-3-2-3 2z" /><path d="M9.5 8.5h5M9.5 12h5" /></>,
+  bank: <><path d="M3 10l9-6 9 6M5 10v8M9.5 10v8M14.5 10v8M19 10v8M3 20h18" /></>,
+  shield: <><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z" /><path d="M8.5 12l2.5 2.5L15.5 10" /></>,
+}
+
+/** One output: icon, what it is, then a wide download button next to a compact preview button. */
+function OutCard(props: {
+  tone: string; icon: string; title: string; tag: string; desc: string; extra?: React.ReactNode
+  accent?: boolean; disabled: boolean; downloadLabel: string; onDownload: () => void; onPreview: () => void
+}) {
+  const { tone, icon, title, tag, desc, extra, accent, disabled, downloadLabel, onDownload, onPreview } = props
+  return (
+    <div className={`card out-card tone-${tone}`}>
+      <div className="out-top">
+        <span className="out-ico" aria-hidden="true">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">{OUT_ICONS[icon]}</svg>
+        </span>
+        <div className="out-title">
+          <h3>{title}</h3>
+          <span className="out-tag">{tag}</span>
+        </div>
+      </div>
+      <p className="out-desc">{desc}</p>
+      {extra}
+      <div className="out-actions">
+        <button className={`btn ${accent ? 'accent' : ''}`} type="button" disabled={disabled} onClick={onDownload}>
+          <span className="btn-ico" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M8 2.5v8M4.5 7.5L8 11l3.5-3.5M3 13.5h10" /></svg>
+          </span>
+          {downloadLabel}
+        </button>
+        <button className="btn ghost" type="button" onClick={onPreview} aria-label={`ดูตัวอย่าง${title}`}>
+          <span className="btn-ico" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z" /><circle cx="8" cy="8" r="2" /></svg>
+          </span>
+          ดูตัวอย่าง
+        </button>
+      </div>
+    </div>
+  )
+}
+
 const STEP_NAMES = ['อัปโหลดไฟล์', 'จับคู่คอลัมน์', 'ตรวจสอบข้อมูล', 'ข้อมูลบริษัท', 'สร้างเอกสาร']
 
 type Busy = { kind: string; done: number; total: number } | null
@@ -527,45 +571,51 @@ export default function App() {
             {ready && (
               <>
                 <div className="out">
-                  <div className="card">
-                    <h3>สลิปเงินเดือน (PDF)</h3>
-                    <p>ZIP รวม PDF ของพนักงานทุกคน {computed.length} ฉบับ</p>
-                    <button className="btn accent" disabled={!!busy} onClick={() => run('slip', computed.length, async (p) => {
+                  <OutCard
+                    tone="slip" icon="doc" title="สลิปเงินเดือน" tag="PDF" accent
+                    desc={`ZIP รวม PDF พนักงานทุกคน ${computed.length} ฉบับ`}
+                    disabled={!!busy} downloadLabel="ดาวน์โหลด ZIP"
+                    onDownload={() => run('slip', computed.length, async (p) => {
                       download(`payslips_${settings.period}.zip`, await payslipZip(computed, settings, p), 'application/zip')
-                    })}>ดาวน์โหลดสลิป</button>
-                    <button className="btn ghost" type="button" onClick={() => setViewer('slips')}><span className="btn-ico" aria-hidden="true">👁</span> ดูตัวอย่าง</button>
-                  </div>
-                  <div className="card">
-                    <h3>รายงานภาษี</h3>
-                    <p>ภ.ง.ด.1 ภ.ง.ด.1ก และหนังสือรับรองหัก ณ ที่จ่าย (50 ทวิ)</p>
-                    <button className="btn" disabled={!!busy} onClick={() => run('tax', computed.length + 2, async (p) => {
+                    })}
+                    onPreview={() => setViewer('slips')}
+                  />
+                  <OutCard
+                    tone="tax" icon="tax" title="รายงานภาษี" tag="PDF"
+                    desc="ภ.ง.ด.1, ภ.ง.ด.1ก และ 50 ทวิ"
+                    disabled={!!busy} downloadLabel="ดาวน์โหลด ZIP"
+                    onDownload={() => run('tax', computed.length + 2, async (p) => {
                       download(`tax_${settings.period}.zip`, await taxZip(computed, settings, p), 'application/zip')
-                    })}>ดาวน์โหลดรายงานภาษี</button>
-                    <button className="btn ghost" type="button" onClick={() => setViewer('tax')}><span className="btn-ico" aria-hidden="true">👁</span> ดูตัวอย่าง</button>
-                  </div>
-                  <div className="card">
-                    <h3>ไฟล์โอนเงินเดือน</h3>
-                    <div className="field">
-                      <label htmlFor="bk" className="sr-only" style={{ position: 'absolute', left: -9999 }}>ธนาคาร</label>
-                      <Select id="bk" ariaLabel="เลือกธนาคาร" value={bank} onChange={(v) => setBank(v as BankCode)}
-                        options={BANKS.map((b) => ({ value: b.code, label: b.label }))} />
-                    </div>
-                    <p>รูปแบบทั่วไป ตรวจกับแม่แบบของธนาคารก่อนอัปโหลดจริง</p>
-                    <button className="btn" disabled={!!busy} onClick={() => {
+                    })}
+                    onPreview={() => setViewer('tax')}
+                  />
+                  <OutCard
+                    tone="bank" icon="bank" title="ไฟล์โอนเงินเดือน" tag="TXT"
+                    desc="ตรวจกับแม่แบบธนาคารก่อนใช้จริง"
+                    extra={(
+                      <div className="field">
+                        <label htmlFor="bk" className="sr-only" style={{ position: 'absolute', left: -9999 }}>ธนาคาร</label>
+                        <Select id="bk" ariaLabel="เลือกธนาคาร" value={bank} onChange={(v) => setBank(v as BankCode)}
+                          options={BANKS.map((b) => ({ value: b.code, label: b.label }))} />
+                      </div>
+                    )}
+                    disabled={!!busy} downloadLabel="ดาวน์โหลดไฟล์"
+                    onDownload={() => {
                       const f = makeBank(bank, computed, settings)
                       download(f.name, f.data)
-                    }}>ดาวน์โหลดไฟล์โอนเงิน</button>
-                    <button className="btn ghost" type="button" onClick={() => setViewer('bank')}><span className="btn-ico" aria-hidden="true">👁</span> ดูตัวอย่าง</button>
-                  </div>
-                  <div className="card">
-                    <h3>ไฟล์ประกันสังคม (e-Service)</h3>
-                    <p>ไฟล์สมทบรายเดือน ตรวจกับข้อกำหนด สปส. ก่อนยื่นจริง</p>
-                    <button className="btn" disabled={!!busy} onClick={() => {
+                    }}
+                    onPreview={() => setViewer('bank')}
+                  />
+                  <OutCard
+                    tone="sso" icon="shield" title="ไฟล์ประกันสังคม" tag="e-Service"
+                    desc="ตรวจกับข้อกำหนด สปส. ก่อนยื่นจริง"
+                    disabled={!!busy} downloadLabel="ดาวน์โหลดไฟล์"
+                    onDownload={() => {
                       const f = makeEsso(computed, settings)
                       download(f.name, f.data)
-                    }}>ดาวน์โหลดไฟล์ประกันสังคม</button>
-                    <button className="btn ghost" type="button" onClick={() => setViewer('esso')}><span className="btn-ico" aria-hidden="true">👁</span> ดูตัวอย่าง</button>
-                  </div>
+                    }}
+                    onPreview={() => setViewer('esso')}
+                  />
                 </div>
                 {busy && (
                   <div style={{ marginTop: 16 }} role="status" aria-live="polite">
